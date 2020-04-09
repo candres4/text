@@ -30,13 +30,46 @@ from tensorflow.python.ops.ragged import ragged_factory_ops
 from tensorflow.python.ops.ragged import ragged_map_ops
 from tensorflow.python.ops.ragged import ragged_tensor
 from tensorflow.python.platform import test
-from tensorflow_text.python.ops import ragged_test_util
 from tensorflow_text.python.ops import sentence_breaking_ops
 
 
 @test_util.run_all_in_graph_and_eager_modes
-class Breaka3TestCases(ragged_test_util.RaggedTensorTestCase,
-                       parameterized.TestCase):
+class RegexSentenceBreakerTestCases(test.TestCase, parameterized.TestCase):
+
+  @parameterized.parameters([
+      # Split on new line.
+      dict(
+          text_input=[
+              "Hi there.\nWhat time is it?\nIt is gametime.",
+              "Who let the dogs out?\nWho?\nWho?\nWho?",
+          ],
+          expected=[["Hi there.", "What time is it?", "It is gametime."],
+                    ["Who let the dogs out?", "Who?", "Who?", "Who?"]],
+      ),
+      # Custom regex.
+      dict(
+          text_input=[
+              "Hi there.\r\nWhat time is it?\r\nIt is gametime.",
+              "Who let the dogs out?\r\nWho?\r\nWho?\r\nWho?",
+          ],
+          expected=[["Hi there.", "What time is it?", "It is gametime."],
+                    ["Who let the dogs out?", "Who?", "Who?", "Who?"]],
+          new_sentence_regex="\r\n",
+      ),
+  ])
+  def testNewLineSentenceBreaker(self,
+                                 text_input,
+                                 expected,
+                                 new_sentence_regex=None):
+    text_input = constant_op.constant(text_input)
+    sentence_breaker = sentence_breaking_ops.NewLineSentenceBreaker(
+        new_sentence_regex)
+    actual = sentence_breaker.break_sentences(text_input)
+    self.assertAllEqual(actual, expected)
+
+
+@test_util.run_all_in_graph_and_eager_modes
+class SentenceFragmenterTestCases(test.TestCase, parameterized.TestCase):
 
   def getTokenWord(self, text, token_starts, token_ends):
     def _FindSubstr(input_tensor):
@@ -118,11 +151,10 @@ class Breaka3TestCases(ragged_test_util.RaggedTensorTestCase,
 
     fragment_starts, fragment_ends, fragment_properties, terminal_punc = (
         fragments)
-    self.assertRaggedEqual(expected_fragment_start, fragment_starts)
-    self.assertRaggedEqual(expected_fragment_end, fragment_ends)
-    self.assertRaggedEqual(expected_fragment_properties,
-                           fragment_properties)
-    self.assertRaggedEqual(expected_terminal_punc, terminal_punc)
+    self.assertAllEqual(expected_fragment_start, fragment_starts)
+    self.assertAllEqual(expected_fragment_end, fragment_ends)
+    self.assertAllEqual(expected_fragment_properties, fragment_properties)
+    self.assertAllEqual(expected_terminal_punc, terminal_punc)
 
   @parameterized.parameters([
       # Test acronyms
@@ -153,11 +185,10 @@ class Breaka3TestCases(ragged_test_util.RaggedTensorTestCase,
 
     fragment_starts, fragment_ends, fragment_properties, terminal_punc = (
         fragments)
-    self.assertRaggedEqual(expected_fragment_start, fragment_starts)
-    self.assertRaggedEqual(expected_fragment_end, fragment_ends)
-    self.assertRaggedEqual(expected_fragment_properties,
-                           fragment_properties)
-    self.assertRaggedEqual(expected_terminal_punc, terminal_punc)
+    self.assertAllEqual(expected_fragment_start, fragment_starts)
+    self.assertAllEqual(expected_fragment_end, fragment_ends)
+    self.assertAllEqual(expected_fragment_properties, fragment_properties)
+    self.assertAllEqual(expected_terminal_punc, terminal_punc)
 
   @parameterized.parameters([
       # Too many ragged ranks

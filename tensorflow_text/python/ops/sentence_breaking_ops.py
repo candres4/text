@@ -14,14 +14,84 @@
 # limitations under the License.
 
 """Break sentence ops."""
+import abc
 
 from tensorflow.python.ops.ragged import ragged_tensor
-
 from tensorflow.python.framework import load_library
 from tensorflow.python.platform import resource_loader
 gen_sentence_breaking_ops = load_library.load_op_library(resource_loader.get_path_to_datafile('_sentence_breaking_ops.so'))
+from tensorflow_text.python.ops import regex_split_ops
 
 
+class SentenceBreaker(object):
+  """An abstract base class for sentence breaker implementations."""
+
+  @abc.abstractmethod
+  def break_sentences(self, input):  # pylint: disable=redefined-builtin
+    """Splits `input` into sentences.
+
+    Args:
+      input: A 1-dimensional `Tensor` of type string.
+
+    Returns:
+      A string `RaggedTensor` of shape [batch, (num_sentences)] dimensions where
+      the last dimension is ragged and contains the number of sentences.
+    """
+    raise NotImplementedError()
+
+
+class SentenceBreakerWithOffsets(SentenceBreaker):
+  """An abstract base class for sentence breakers that support offsets."""
+
+  @abc.abstractmethod
+  def break_sentences_with_offsets(self, input):  # pylint: disable=redefined-builtin
+    """Splits `input` into sentences and returns the starting & ending offsets.
+
+    Args:
+      input: A 1-dimensional `Tensor` of type string.
+
+    Returns:
+      A tuple of (sentences, begin_offset, end_offset) where:
+
+      sentences: A string `RaggedTensor` of shape [batch, (num_sentences)]
+        dimensions where the last dimension is ragged and contains the number of
+        sentences.
+      begin_offset: A int64 `RaggedTensor` of shape [batch, (num_sentences)]
+        that contains the beginning byte offsets of the sentence.
+      end_offset: A int64 `RaggedTensor` of shape [batch, (num_sentences)] that
+        contains the ending byte offsets of the sentence.
+    """
+    raise NotImplementedError()
+
+
+class NewLineSentenceBreaker(SentenceBreakerWithOffsets):
+  """A `SentenceBreaker` that splits sentences separated by a newline.
+
+  `NewLineSentenceBreaker` splits text when a newline character is detected.
+  The newline character is determined by a regex pattern. It also returns the
+  sentence beginning and ending byte offsets as well.
+  """
+
+  def __init__(self, new_sentence_regex=None):
+    r"""Creates an instance of `NewLineSentenceBreaker`.
+
+    Args:
+      new_sentence_regex: (optional) A string containing the regex pattern of a
+        new line sentence delimiter. Default is '\n'.
+    """
+    if not new_sentence_regex:
+      new_sentence_regex = '\n'
+    self._new_sentence_regex = new_sentence_regex
+
+  def break_sentences(self, input):   # pylint: disable=redefined-builtin
+    return regex_split_ops.regex_split(input, self._new_sentence_regex)
+
+  def break_sentences_with_offsets(self, input):  # pylint: disable=redefined-builtin
+    return regex_split_ops.regex_split_with_offsets(input,
+                                                    self._new_sentence_regex)
+
+
+# TODO(thuang513): Wrap this into a HeuristicBasedSentenceBreaker class.
 def sentence_fragments(token_word,
                        token_starts,
                        token_ends,
